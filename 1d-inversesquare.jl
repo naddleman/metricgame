@@ -157,11 +157,19 @@ function runsimulationbr(numagents, payoffs, distancepower, prob, epochs)
   println("simulation successful!")
   #plot(typelocations[1][1], seriestype=:scatter)
   #plot!(typelocations[1][2], seriestype=:scatter)
-  return (typelocations, list)
+  return (typelocations, getproportion(population)) 
 end
 
 function multirun(numagents, payoffs, distancepower, prob, epochs, runs)
-
+  proportions = []
+  for i in 1:runs
+    push!(proportions, runsimulationbr(numagents, payoffs, distancepower,
+                                     prob, epochs)[2])
+  end
+  for i in proportions
+    println(i)
+  end
+end
 
 
 # locationarray is an array of pairs of lists of coordinates :(
@@ -187,8 +195,8 @@ PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
 
-
-typelocs = runsimulationbr(10, coord, power, 0.5, 35)
+multirun(6, coord, power, 0.5, 30, 100)
+#typelocs = runsimulationbr(10, coord, power, 0.5, 35)
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
