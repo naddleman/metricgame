@@ -166,11 +166,30 @@ function multirun(numagents, payoffs, distancepower, prob, epochs, runs)
     push!(proportions, runsimulationbr(numagents, payoffs, distancepower,
                                      prob, epochs)[2])
   end
+  x = length(proportions)
+  y = 0
+  heterofraction = 0
   for i in proportions
+    println(i)
+    if !(i == 0 || i == 1)
+      y += 1
+    end
+  end
+  return (proportions, y/length(proportions))
+end
+
+function popsizesweep(popsizelist, payoffs, distancepower,
+                      prob, epochs, runs)
+  heterogeneousfraction = []
+  proportionslist = []
+  for size in popsizelist
+    push!(proportionslist, (size, multirun(size, payoffs, distancepower, prob,
+                                           epochs, runs))[2])
+  end
+  for i in proportionslist
     println(i)
   end
 end
-
 
 # locationarray is an array of pairs of lists of coordinates :(
 using Plots
@@ -185,24 +204,26 @@ function locationgif(locationarray)
   end
 end
 
-
-
-
 ##Constants
 power = 1
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
+popsizes = [4, 7, 10, 13, 16, 19, 22, 25]
 
-multirun(6, coord, power, 0.5, 30, 100)
+
+
+#multirun(50, coord, power, 0.5, 30, 100)
 #typelocs = runsimulationbr(10, coord, power, 0.5, 35)
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
+popsizesweep(popsizes, coord, power, 0.5, 20, 30)
 
 
-
+#function popsizesweep(popsizelist, payoffs, distancepower,
+#                      prob, epochs, runs)
 #testagents = mkagents(5, 0.5)
 #weightmat = genweightmatrix(testagents, power)
 #println(testagents)
