@@ -1,4 +1,4 @@
-"Place n agents randomly across the 2-D flat torus and interact"
+"Place n agents randomly across the 1-D flat torus and interact"
 
 mutable struct Agent
   loc:: Float64
@@ -26,15 +26,28 @@ function agentdist(a::Agent, b::Agent)
   tdis(a.loc, b.loc)
 end
 
-function agentpower(a::Agent, b::Agent, dropoff) #tentatitive strength
+## alpha is unused here
+function expdecay(a::Agent, b::Agent, dropoff) #tentatitive strength
   exp(-dropoff * agentdist(a,b))                 #of interaction
 end
 
-function agentpower2(a::Agent, b::Agent, dropoff)
-  1 / (dropoff * agentdist(a,b))^2
+function inversepower(a::Agent, b::Agent, dropoff)
+  1 / (dropoff * agentdist(a,b))^alpha
 end
 
-function typedsums(list, label, power)
+
+function altipl(a::Agent, b::Agent, dropoff)
+  1 / (1 + (dropoff * agentdist(a,b))^alpha)
+end
+
+
+
+# functions have type agent -> agent -> Re+ -> Re+ -> Re+
+decayfns = Dict{String, Function}("expdecay" => expdecay,
+                                  "IPL" => inversepower,
+                                  "alt-IPL" => altipl)
+
+function typedsums(list, label, power, func)
                   #takes [Agent] and a label to find out the
                   # strength of pull from each type
   workinglist = copy(list)
@@ -42,29 +55,27 @@ function typedsums(list, label, power)
   sums = [0.0,0.0]
   for agent in workinglist
     if agent.strat == 1
-      sums[1] += agentpower2(list[label],agent,power)
+      sums[1] += func(list[label],agent,power)
     else
-      sums[2] += agentpower2(list[label],agent,power)
+      sums[2] += func(list[label],agent,power)
     end
   end
   return sums
 end
 
-function genweightmatrix(list, power) #matrix of agent-agent interaction strength
+function genweightmatrix(list, power, func) #matrix of agent-agent interaction strength
   matrix = Array{Float64}((length(list), length(list)))
   for i in 1:length(list)
     for j in 1:length(list)
       if i == j
         matrix[i, j] = 0
       else
-        matrix[i, j] = agentpower2(list[i], list[j], power)
+        matrix[i, j] = func(list[i], list[j], power)
       end
     end
   end
   return matrix
 end
-
-##function updateagent(list, index) # using logit choice
 
  #matrix not to recalculate interactions
 function payofflist(list, powermatrix, game)
@@ -134,11 +145,13 @@ function splitpops(agentlist)
   return (type1s, type2s)
 end
 
-#arguments: # agents, game, distance discounting, Pr(strat =1), # iterations
-function runsimulationbr(numagents, payoffs, distancepower, prob, epochs)
+#arguments: # agents, game, distance discounting, Pr(strat =1),
+# iterations, decay function
+function runsimulationbr(numagents, payoffs, distancepower, prob,
+                         epochs, func)
   iterations = epochs * numagents
   population = mkagents(numagents, prob)
-  weights = genweightmatrix(population, distancepower)
+  weights = genweightmatrix(population, distancepower, func)
   #println("starting condition:")
   #println(population)
   print("proportion playing 1:")
@@ -160,17 +173,20 @@ function runsimulationbr(numagents, payoffs, distancepower, prob, epochs)
   return (typelocations, getproportion(population)) 
 end
 
-function multirun(numagents, payoffs, distancepower, prob, epochs, runs)
+function multirun(numagents, payoffs, distancepower, prob, epochs,
+                  runs, func)
   proportions = []
   for i in 1:runs
+    print("Pop size: ", numagents)
+    println("  Run ", i, " out of ", runs)
     push!(proportions, runsimulationbr(numagents, payoffs, distancepower,
-                                     prob, epochs)[2])
+                                     prob, epochs, func)[2])
   end
   x = length(proportions)
   y = 0
   heterofraction = 0
   for i in proportions
-    println(i)
+    #println(i)
     if !(i == 0 || i == 1)
       y += 1
     end
@@ -179,12 +195,19 @@ function multirun(numagents, payoffs, distancepower, prob, epochs, runs)
 end
 
 function popsizesweep(popsizelist, payoffs, distancepower,
-                      prob, epochs, runs)
+                      prob, epochs, runs, func)
   heterogeneousfraction = []
   proportionslist = []
   for size in popsizelist
     push!(proportionslist, (size, multirun(size, payoffs, distancepower, prob,
-                                           epochs, runs))[2])
+                                           epochs, runs, func))[2])
+  end
+  println("\n######\ngamma = ", distancepower)
+  println("epochs = ", epochs)
+  println("runs per population size = ", runs)
+  for i in 1:length(proportionslist)
+    println("population size: ", popsizelist[i], " HNE proportion: ",
+            proportionslist[i][2])
   end
   for i in proportionslist
     println(i)
@@ -205,25 +228,24 @@ function locationgif(locationarray)
 end
 
 ##Constants
-power = 1
+power = 10
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [4, 7, 10, 13, 16, 19, 22, 25]
-
-
+popsizes = [(2:8)*2;]
+alpha = 2 # exponent for inverse power laws
+decayfunc = decayfns["IPL"]
 
 #multirun(50, coord, power, 0.5, 30, 100)
 #typelocs = runsimulationbr(10, coord, power, 0.5, 35)
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
-popsizesweep(popsizes, coord, power, 0.5, 20, 30)
+popsizesweep(popsizes, coord, power, 0.5, 20, 50, decayfunc)
 
 
-#function popsizesweep(popsizelist, payoffs, distancepower,
-#                      prob, epochs, runs)
+#popsizesweep(popsizelist, payoffs, distancepower, prob, epochs, runs)
 #testagents = mkagents(5, 0.5)
 #weightmat = genweightmatrix(testagents, power)
 #println(testagents)

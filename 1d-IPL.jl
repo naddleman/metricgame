@@ -42,9 +42,9 @@ function typedsums(list, label, power)
   sums = [0.0,0.0]
   for agent in workinglist
     if agent.strat == 1
-      sums[1] += agentpower(list[label],agent,power)
+      sums[1] += agentpower2(list[label],agent,power)
     else
-      sums[2] += agentpower(list[label],agent,power)
+      sums[2] += agentpower2(list[label],agent,power)
     end
   end
   return sums
@@ -57,7 +57,7 @@ function genweightmatrix(list, power) #matrix of agent-agent interaction strengt
       if i == j
         matrix[i, j] = 0
       else
-        matrix[i, j] = agentpower(list[i], list[j], power)
+        matrix[i, j] = agentpower2(list[i], list[j], power)
       end
     end
   end
@@ -186,13 +186,6 @@ function popsizesweep(popsizelist, payoffs, distancepower,
     push!(proportionslist, (size, multirun(size, payoffs, distancepower, prob,
                                            epochs, runs))[2])
   end
-  println("\n######\ngamma = ", distancepower)
-  println("epochs = ", epochs)
-  println("runs per population size = ", runs)
-  for i in 1:length(proportionslist)
-    println("population size: ", popsizelist[i], " HNE proportion: ",
-            proportionslist[i][2])
-  end
   for i in proportionslist
     println(i)
   end
@@ -212,12 +205,12 @@ function locationgif(locationarray)
 end
 
 ##Constants
-power = 10
+power = 1
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [(2:32)*2;]
+popsizes = [4, 7, 10]
 
 
 
@@ -226,10 +219,11 @@ popsizes = [(2:32)*2;]
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
-popsizesweep(popsizes, coord, power, 0.5, 20, 50)
+popsizesweep(popsizes, coord, power, 0.5, 20, 30)
 
 
-#popsizesweep(popsizelist, payoffs, distancepower, prob, epochs, runs)
+#function popsizesweep(popsizelist, payoffs, distancepower,
+#                      prob, epochs, runs)
 #testagents = mkagents(5, 0.5)
 #weightmat = genweightmatrix(testagents, power)
 #println(testagents)
