@@ -206,46 +206,64 @@ function popsizesweep(popsizelist, payoffs, distancepower,
   println("epochs = ", epochs)
   println("runs per population size = ", runs)
   for i in 1:length(proportionslist)
+    push!(heterogeneousfraction, proportionslist[i][2])
     println("population size: ", popsizelist[i], " HNE proportion: ",
             proportionslist[i][2])
   end
-  for i in proportionslist
-    println(i)
-  end
+  #for i in proportionslist
+  #  println(i)
+  #end
+  return (popsizelist, heterogeneousfraction)
 end
 
 # locationarray is an array of pairs of lists of coordinates :(
-using Plots
-pyplot()
+#using Plots
+#pyplot()
 
-function locationgif(locationarray)
-  @gif for i in locationarray
-    plot(map(a -> a[1], i[1]),map(a -> a[2], i[1]), seriestype=:scatter,
-         leg=false)
-    plot!(map(a -> a[1], i[2]),map(a -> a[2], i[2]), seriestype=:scatter,
-          m=:x, leg=false)
-  end
-end
+#function locationgif(locationarray)
+#  @gif for i in locationarray
+#    plot(map(a -> a[1], i[1]),map(a -> a[2], i[1]), seriestype=:scatter,
+#         leg=false)
+#    plot!(map(a -> a[1], i[2]),map(a -> a[2], i[2]), seriestype=:scatter,
+#          m=:x, leg=false)
+#  end
+#end
 
 ##Constants
-power = 10
+power = 20
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [(2:8)*2;]
+popsizes = [((1:12)*2).^2;]
 alpha = 2 # exponent for inverse power laws
-decayfunc = decayfns["IPL"]
+epochs = 35
+runs = 1500
+decayby = "alt-IPL"
+# ["expdecay", "IPL", "alt-IPL"]
+decayfunc = decayfns[decayby]
 
 #multirun(50, coord, power, 0.5, 30, 100)
 #typelocs = runsimulationbr(10, coord, power, 0.5, 35)
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
-popsizesweep(popsizes, coord, power, 0.5, 20, 50, decayfunc)
+(pops, proportions) = popsizesweep(popsizes, coord, power, 0.5,
+                                   epochs, runs, decayfunc)
 
-
-#popsizesweep(popsizelist, payoffs, distancepower, prob, epochs, runs)
+using PyPlot
+p = scatter(pops, proportions)
+# p = plot(pops, proportions, "b-", linewidth=2)
+xlabel("population")
+ax = gca()
+ax[:set_xscale]("log")
+ylabel("miscoordination rate")
+titlestring = string(decayby, ", alpha: ", alpha, ", gamma: ", power,
+                    ", epochs:", epochs, ", runs:", runs)
+title(titlestring)
+savefig("big-alt-IPL-gamma-20.png")
+show()
+#popsizesweep(popsizelist, payoffs, distancepower, prob, epochs, runs, func)
 #testagents = mkagents(5, 0.5)
 #weightmat = genweightmatrix(testagents, power)
 #println(testagents)
