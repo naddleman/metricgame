@@ -230,16 +230,16 @@ end
 #end
 
 ##Constants
-power = 20
+power = 15 
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [((1:12)*2).^2;]
+popsizes = [((1:10)*2).^2;]
 alpha = 2 # exponent for inverse power laws
 epochs = 35
 runs = 1500
-decayby = "alt-IPL"
+decayby = "IPL"
 # ["expdecay", "IPL", "alt-IPL"]
 decayfunc = decayfns[decayby]
 
@@ -261,7 +261,7 @@ ylabel("miscoordination rate")
 titlestring = string(decayby, ", alpha: ", alpha, ", gamma: ", power,
                     ", epochs:", epochs, ", runs:", runs)
 title(titlestring)
-savefig("big-alt-IPL-gamma-20.png")
+savefig("xxbig-exp-gamma-20.png")
 show()
 #popsizesweep(popsizelist, payoffs, distancepower, prob, epochs, runs, func)
 #testagents = mkagents(5, 0.5)

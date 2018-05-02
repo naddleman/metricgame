@@ -178,14 +178,14 @@ end
 
 
 ##Constants
-power = 100
+power = 15
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
+anticoord = [0 1; 1 0]
 
-
-typelocs = runsimulationbr(2000, coord, power, 0.5, 30)
+typelocs = runsimulationbr(500, coord, power, 0.5, 30)
 locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)

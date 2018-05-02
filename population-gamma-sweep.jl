@@ -6,7 +6,6 @@ mutable struct Agent
   lab::Integer
 end
 
-
 function tdis(pt1, pt2) #minimum euclidean distance on circle
   perpdist(a, b) = min(abs(mod(a,1) - mod(b,1)),
                        1 - abs(mod(a,1) - mod(b,1)))
@@ -21,7 +20,6 @@ function mkagents(n::Integer, p) # agents have [(location), type, label]
   return lis
 end
 
-
 function agentdist(a::Agent, b::Agent)
   tdis(a.loc, b.loc)
 end
@@ -35,12 +33,9 @@ function inversepower(a::Agent, b::Agent, dropoff)
   1 / (dropoff * agentdist(a,b))^alpha
 end
 
-
 function altipl(a::Agent, b::Agent, dropoff)
   1 / (1 + (dropoff * agentdist(a,b))^alpha)
 end
-
-
 
 # functions have type agent -> agent -> Re+ -> Re+ -> Re+
 decayfns = Dict{String, Function}("expdecay" => expdecay,
@@ -216,6 +211,20 @@ function popsizesweep(popsizelist, payoffs, distancepower,
   return (popsizelist, heterogeneousfraction)
 end
 
+
+function writeresults(popsizelist, payoffs, gammalist,
+                      prob, epochs, runs, func)
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby,
+                    "-parameter-sweep.csv")
+  popsrow = deepcopy(popsizelist)
+  results = Array{Float64}(length(gammalist) + 1, length(popsizelist) + 1)
+  results[1, :] = prepend!(popsrow, 0)
+  for i in 1:length(gammalist)
+    results[i+1,:] = prepend!(popsizesweep(popsizelist, payoffs, gammalist[i],
+                                          prob, epochs, runs, func)[2], gammalist[i])
+  end
+  writecsv(csvtitle, results)
+end
 # locationarray is an array of pairs of lists of coordinates :(
 #using Plots
 #pyplot()
@@ -235,10 +244,11 @@ game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [((1:10)*2).^2;]
+popsizes = [10, 15, 20, 25]
+gammalist = [10, 15, 20]
 alpha = 2 # exponent for inverse power laws
 epochs = 35
-runs = 1500
+runs = 30
 decayby = "IPL"
 # ["expdecay", "IPL", "alt-IPL"]
 decayfunc = decayfns[decayby]
@@ -248,6 +258,10 @@ decayfunc = decayfns[decayby]
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
+
+writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc)
+
+#=
 (pops, proportions) = popsizesweep(popsizes, coord, power, 0.5,
                                    epochs, runs, decayfunc)
 
@@ -263,6 +277,10 @@ titlestring = string(decayby, ", alpha: ", alpha, ", gamma: ", power,
 title(titlestring)
 savefig("xxbig-exp-gamma-20.png")
 show()
+=#
+
+
+
 #popsizesweep(popsizelist, payoffs, distancepower, prob, epochs, runs, func)
 #testagents = mkagents(5, 0.5)
 #weightmat = genweightmatrix(testagents, power)
