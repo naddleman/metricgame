@@ -57,6 +57,15 @@ function mkagents(n::Integer, p, dim) # agents have [(location), type, label]
   return lis
 end
 
+function mkagentslocations(locs, p, dim)
+  lis = []
+  n = length(locs)
+  for i in 1:n 
+    push!(lis,agenttypes[dim](locs[i],rand([1,2]), i))
+  end
+  return lis
+end
+
 function agentdist(a, b, dim)
   distancefns[dim](a.loc, b.loc)
 end
@@ -198,6 +207,79 @@ function runsimulationbr(numagents, payoffs, distancepower, prob,
   return (typelocations, getproportion(population)) 
 end
 
+# simulates with fixed agent locations instead of making list of agents
+function runlocsbr(locations, payoffs, distancepower, prob, epochs, func
+                   , dim)
+  iterations = epochs * length(locations)
+  numagents = length(locations)
+  population = mkagentslocations(locations, prob, dim)
+  weights = genweightmatrix(population, distancepower, func, dim)
+  print("proportion playing 1:")
+  println(getproportion(population))
+  typelocations = [splitpops(population)]
+  for i in 1:iterations
+    if i % numagents == 0
+      @printf "epoch %d: " (i/numagents)
+      println(getproportion(population))
+      push!(typelocations, splitpops(population))
+    end
+    brupdate(rand(1:numagents), population, weights, payoffs)
+  end
+  println("simulation successful!")
+  return (typelocations, getproportion(population))
+end
+
+
+# this initializes locations and runs a series of simulations with different
+#initial strategies to see if the arrangment admits an HNE
+
+function testhne(numagents, payoffs, distancepower, epochs, limit, func, dim)
+  locs = []
+  heterocount = 0
+  i = 0
+  for i in 1:numagents
+    if dim == 1
+      push!(locs, rand())
+    elseif dim == 2
+      push!(locs, (rand(), rand()))
+    elseif dim == 3
+      push!(locs, (rand(), rand(), rand()))
+    end
+  end
+  for i = 1:limit
+    println("testing arrangement iteration: ", i)
+    heterogeneity = runlocsbr(locs, payoffs, distancepower, 0.5, epochs,
+                              func, dim)[2]
+    if !(heterogeneity == 0 || heterogeneity == 1)
+      heterocount += 1
+      break
+    end
+  end
+  if heterocount >= 1
+    println("HNE found")
+  else
+    println("no HNE found")
+  end
+  return heterocount
+end
+
+#TODO: HERE    
+# generates a set of locations and tests which proportion admits HNE
+
+function multihne(numagents, payoffs, distancepower, epochs, limit, func,
+                  dim, runs)
+  hnecount = 0
+  for i = 1:runs
+    print("Pop size: ", numagents)
+    println("  Run ", i, " out of ", runs)
+    hnecount += testhne(numagents, payoffs, distancepower, epochs, limit,
+                        func, dim)
+  end
+  fraction = hnecount / runs
+  println(fraction, " admit HNE")
+  return fraction
+end
+
 function multirun(numagents, payoffs, distancepower, prob, epochs,
                   runs, func, dim)
   proportions = []
@@ -241,6 +323,34 @@ function popsizesweep(popsizelist, payoffs, distancepower,
   return (popsizelist, heterogeneousfraction)
 end
 
+function popsizehnesweep(popsizelist, payoffs, distancepower, prob,
+                         epochs, limit, runs, func, dim)
+  hnepossiblefraction = []
+  for size in popsizelist
+    push!(hnepossiblefraction, multihne(size, payoffs, distancepower, epochs,
+                                        limit, func, dim, runs))
+  end
+  println("\n######\ngamma = ", distancepower)
+  println("epochs = ", epochs)
+  println("runs per population size = ", runs)
+  return (popsizelist, hnepossiblefraction)
+end
+
+function writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
+                         func, dim, limit)
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby,
+                    "-HNE-parameter-sweep.csv")
+  popsrow = deepcopy(popsizelist)
+  results = Array{Float64}(length(gammalist) + 1, length(popsizelist) + 1)
+  results[1, :] = prepend!(popsrow, 0)
+  for i in 1:length(gammalist)
+    results[i+1,:] = prepend!(popsizehnesweep(
+                                popsizelist, payoffs, gammalist[i], prob,
+                                epochs, limit, runs, func, dim)[2],
+                              gammalist[i])
+  end
+  writecsv(csvtitle, results)
+end
 
 function writeresults(popsizelist, payoffs, gammalist,
                       prob, epochs, runs, func, dim)
@@ -270,17 +380,19 @@ end
 #end
 
 ##Constants
-dim = 3
+dim = 1
 power = 15 
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [10, 20, 80]
-gammalist = [0.5, 1, 5, 100]
+popsizes = [10, 20,50]
+gammalist = [2, 4, 8, 16]
 alpha = 2 # exponent for inverse power laws
 epochs = 35
-runs = 10
+limit = 25 # how many times to try to find an HNE
+runs = 50
+hnelimit = 25 # give up finding hne after this pt
 decayby = "expdecay"
 # ["expdecay", "IPL", "alt-IPL", "linear"]
 decayfunc = decayfns[decayby]
@@ -291,7 +403,19 @@ decayfunc = decayfns[decayby]
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
 
-writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc, dim)
+writeresultshne(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc,
+                dim, limit)
+
+
+#testhne(8, coord, 5, 35, 25, decayfunc, dim)
+#multihne(popsizes[2], coord, gammalist[3], epochs, limit, decayfunc,
+#                  dim, runs)
+#writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc, dim)
+#
+#writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
+#                         func, dim, limit)
+
+
 
 #=
 (pops, proportions) = popsizesweep(popsizes, coord, power, 0.5,

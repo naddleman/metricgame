@@ -12,3 +12,17 @@ Revision
 The payoff to agent *i* is the weighted sum of payoffs from playing against
 every other agent in the population. The weight for an interaction between *i*
 and *j* is given by a (decreasing) function of the distance, *d(i,j)*
+
+
+Producing data
+--------------
+
+**writeresults** sweeps over population sizes and values of gamma (parameter
+acting as distance multiplier) producing a csv with proportion of initial
+conditions converging to HNE.
+
+**multihne** tests a single pop size, value of gamma, and checks how frequently 
+HNE is *possible* by repeatedly testing the same agent locations until HNE
+is found (or giving up)
+
+

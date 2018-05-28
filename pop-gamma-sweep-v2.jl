@@ -1,4 +1,4 @@
-"Place n agents randomly across the 1-D flat torus and interact"
+"Place n agents randomly across N-D flat torus to check if HNE possible"
 
 mutable struct Agent
   loc:: Float64
@@ -6,39 +6,76 @@ mutable struct Agent
   lab::Integer
 end
 
+mutable struct Agent2d
+  loc::Tuple{Float64, Float64}
+  strat::Integer
+  lab::Integer
+end
+
+mutable struct Agent3d
+  loc::Tuple{Float64, Float64, Float64}
+  strat::Integer
+  lab::Integer
+end
+
+function perpdist(pt1, pt2)
+  return min(abs(mod(pt1,1) - mod(pt2,1)), 1 - abs(mod(pt1,1) - mod(pt2,1)))
+end
+
 function tdis(pt1, pt2) #minimum euclidean distance on circle
-  perpdist(a, b) = min(abs(mod(a,1) - mod(b,1)),
-                       1 - abs(mod(a,1) - mod(b,1)))
   return perpdist(pt1, pt2)
 end
 
-function mkagents(n::Integer, p) # agents have [(location), type, label]
+function tdis2(pt1, pt2) #minimum euclidean distance on circle
+  return sqrt(perpdist(pt1[1],pt2[1])^2 + perpdist(pt1[2],pt2[2])^2)
+end
+
+function tdis3(pt1, pt2) #minimum euclidean distance on circle
+  return sqrt(perpdist(pt1[1],pt2[1])^2 + perpdist(pt1[2],pt2[2])^2
+              + perpdist(pt1[3],pt2[3])^2)
+end
+
+agenttypes = [Agent, Agent2d, Agent3d]
+
+distancefns = [tdis, tdis2, tdis3]
+
+function mkagents(n::Integer, p, dim) # agents have [(location), type, label]
   lis = []
-  for i in 1:n               # p in [0,1] is probability of first type
-    push!(lis,Agent(rand(),rand([1,2]), i))
+  if dim == 1
+    for i in 1:n               # p in [0,1] is probability of first type
+      push!(lis,agenttypes[dim](rand(),rand([1,2]), i))
+    end
+  elseif dim == 2
+    for i in 1:n
+      push!(lis, agenttypes[dim]((rand(),rand()),rand([1,2]), i))
+    end
+  elseif dim == 3 
+    for i in 1:n
+      push!(lis, agenttypes[dim]((rand(),rand(),rand()),rand([1,2]), i))
+    end
   end
   return lis
 end
 
-function agentdist(a::Agent, b::Agent)
-  tdis(a.loc, b.loc)
+function agentdist(a, b, dim)
+  distancefns[dim](a.loc, b.loc)
 end
 
 ## alpha is unused here
-function expdecay(a::Agent, b::Agent, dropoff) #tentatitive strength
-  exp(-dropoff * agentdist(a,b))                 #of interaction
+function expdecay(a, b, dropoff,dim) #tentatitive strength
+  exp(-dropoff * agentdist(a,b, dim))                 #of interaction
 end
 
-function inversepower(a::Agent, b::Agent, dropoff)
-  1 / (dropoff * agentdist(a,b))^alpha
+function inversepower(a, b, dropoff, dim)
+  1 / (dropoff * agentdist(a,b,dim))^alpha
 end
 
-function altipl(a::Agent, b::Agent, dropoff)
-  1 / (1 + (dropoff * agentdist(a,b))^alpha)
+function altipl(a, b, dropoff, dim)
+  1 / (1 + (dropoff * agentdist(a,b,dim))^alpha)
 end
 
-function linear(a::Agent, b::Agent, dropoff)
-  dropoff*(1 - 2*agentdist(a,b))
+function linear(a, b, dropoff, dim)
+  dropoff*(1 - 2*agentdist(a,b, dim))
 end
 
 # functions have type agent -> agent -> Re+ -> Re+ -> Re+
@@ -47,7 +84,7 @@ decayfns = Dict{String, Function}("expdecay" => expdecay,
                                   "alt-IPL" => altipl,
                                   "linear" => linear)
 
-function typedsums(list, label, power, func)
+function typedsums(list, label, power, func, dim)
                   #takes [Agent] and a label to find out the
                   # strength of pull from each type
   workinglist = copy(list)
@@ -55,22 +92,22 @@ function typedsums(list, label, power, func)
   sums = [0.0,0.0]
   for agent in workinglist
     if agent.strat == 1
-      sums[1] += func(list[label],agent,power)
+      sums[1] += func(list[label],agent,power, dim)
     else
-      sums[2] += func(list[label],agent,power)
+      sums[2] += func(list[label],agent,power, dim)
     end
   end
   return sums
 end
 
-function genweightmatrix(list, power, func) #matrix of agent-agent interaction strength
+function genweightmatrix(list, power, func, dim) #matrix of agent-agent interaction strength
   matrix = Array{Float64}((length(list), length(list)))
   for i in 1:length(list)
     for j in 1:length(list)
       if i == j
         matrix[i, j] = 0
       else
-        matrix[i, j] = func(list[i], list[j], power)
+        matrix[i, j] = func(list[i], list[j], power, dim)
       end
     end
   end
@@ -93,18 +130,6 @@ function payofflist(list, powermatrix, game)
   end
   return payofflist
 end
-
-# instead of randomly selecting a neighbor, agents will look at the payoffs
-# in the entire population but weight these by interaction strength when
-# revising. So interaction strenght features twice, once in calculating 
-# payoffs, and again in looking at neighbos to immitate.
-# 
-# The transition probability for a player switching x<-y is
-# W(x<-y) = (1 + exp(-(Py - Px)/K) ^ (-1) 
-# from Haubert/Szabo: Game theory and Physics
-# where in this case Py is the "other" type and Px is agent's same type
-#
-# ...Or not. Start with best response, then add noisy BR
 
 function brupdate(label, list, powermatrix, gamematrix) #Best response update
   util1, util2 = 0, 0
@@ -148,10 +173,10 @@ end
 #arguments: # agents, game, distance discounting, Pr(strat =1),
 # iterations, decay function
 function runsimulationbr(numagents, payoffs, distancepower, prob,
-                         epochs, func)
+                         epochs, func, dim)
   iterations = epochs * numagents
-  population = mkagents(numagents, prob)
-  weights = genweightmatrix(population, distancepower, func)
+  population = mkagents(numagents, prob, dim)
+  weights = genweightmatrix(population, distancepower, func, dim)
   #println("starting condition:")
   #println(population)
   print("proportion playing 1:")
@@ -174,13 +199,13 @@ function runsimulationbr(numagents, payoffs, distancepower, prob,
 end
 
 function multirun(numagents, payoffs, distancepower, prob, epochs,
-                  runs, func)
+                  runs, func, dim)
   proportions = []
   for i in 1:runs
     print("Pop size: ", numagents)
     println("  Run ", i, " out of ", runs)
     push!(proportions, runsimulationbr(numagents, payoffs, distancepower,
-                                     prob, epochs, func)[2])
+                                     prob, epochs, func, dim)[2])
   end
   x = length(proportions)
   y = 0
@@ -195,12 +220,12 @@ function multirun(numagents, payoffs, distancepower, prob, epochs,
 end
 
 function popsizesweep(popsizelist, payoffs, distancepower,
-                      prob, epochs, runs, func)
+                      prob, epochs, runs, func, dim)
   heterogeneousfraction = []
   proportionslist = []
   for size in popsizelist
     push!(proportionslist, (size, multirun(size, payoffs, distancepower, prob,
-                                           epochs, runs, func))[2])
+                                           epochs, runs, func, dim))[2])
   end
   println("\n######\ngamma = ", distancepower)
   println("epochs = ", epochs)
@@ -218,7 +243,7 @@ end
 
 
 function writeresults(popsizelist, payoffs, gammalist,
-                      prob, epochs, runs, func)
+                      prob, epochs, runs, func, dim)
   csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby,
                     "-parameter-sweep.csv")
   popsrow = deepcopy(popsizelist)
@@ -226,7 +251,8 @@ function writeresults(popsizelist, payoffs, gammalist,
   results[1, :] = prepend!(popsrow, 0)
   for i in 1:length(gammalist)
     results[i+1,:] = prepend!(popsizesweep(popsizelist, payoffs, gammalist[i],
-                                          prob, epochs, runs, func)[2], gammalist[i])
+                                          prob, epochs, runs, func, dim)[2],
+                              gammalist[i])
   end
   writecsv(csvtitle, results)
 end
@@ -244,6 +270,7 @@ end
 #end
 
 ##Constants
+dim = 3
 power = 15 
 game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
@@ -253,8 +280,8 @@ popsizes = [10, 20, 80]
 gammalist = [0.5, 1, 5, 100]
 alpha = 2 # exponent for inverse power laws
 epochs = 35
-runs = 1000
-decayby = "linear"
+runs = 10
+decayby = "expdecay"
 # ["expdecay", "IPL", "alt-IPL", "linear"]
 decayfunc = decayfns[decayby]
 
@@ -264,7 +291,7 @@ decayfunc = decayfns[decayby]
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
 
-writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc)
+writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc, dim)
 
 #=
 (pops, proportions) = popsizesweep(popsizes, coord, power, 0.5,
