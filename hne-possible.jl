@@ -89,7 +89,7 @@ end
 
 # 1 for d(a,b) < dropoff, 0 otherwise
 function cutoff(a, b, dropoff, dim)
-  if dropoff*agentdist(a, b, ) < 1
+  if dropoff*agentdist(a, b, dim) < 1
     x = 1
   else
     x = 0
@@ -156,12 +156,12 @@ function brupdate(label, list, powermatrix, gamematrix) #Best response update
     util1 += gamematrix[1, list[i].strat] * powermatrix[label, i]
     util2 += gamematrix[2, list[i].strat] * powermatrix[label, i]
   end
-  if util1 == util2
-    list[label].strat = rand([1,2])
+  if util1 < util2
+    list[label].strat = 2
   elseif util1 > util2
     list[label].strat = 1
   else
-    list[label].strat = 2
+    list[label].strat = list[label].strat
   end
   return list
 end
@@ -348,8 +348,8 @@ end
 
 function writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
                          func, dim, limit)
-  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby,
-                    "-HNE-parameter-sweep.csv")
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby, "-dim-",
+                    dim, "-HNE-parameter-sweep.csv")
   popsrow = deepcopy(popsizelist)
   results = Array{Float64}(length(gammalist) + 1, length(popsizelist) + 1)
   results[1, :] = prepend!(popsrow, 0)
@@ -363,9 +363,9 @@ function writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
 end
 
 function writeresults(popsizelist, payoffs, gammalist,
-                      prob, epochs, runs, func, dim)
-  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby,
-                    "-parameter-sweep.csv")
+                      prob, epochs, runs, func, dim, limit)
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby, "-dim-",
+                    dim, "-parameter-sweep.csv")
   popsrow = deepcopy(popsizelist)
   results = Array{Float64}(length(gammalist) + 1, length(popsizelist) + 1)
   results[1, :] = prepend!(popsrow, 0)
@@ -396,15 +396,15 @@ game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [10, 20,50]
-gammalist = [2, 4, 8, 16]
+popsizes = [4,8,12,16,20,24,28,32,36,40,44]
+gammalist = [2, 4, 8, 16, 32]
 alpha = 2 # exponent for inverse power laws
-epochs = 35
+epochs = 100
 limit = 25 # how many times to try to find an HNE
-runs = 50
+runs = 200
 hnelimit = 25 # give up finding hne after this pt
-decayby = "expdecay"
-# ["expdecay", "IPL", "alt-IPL", "linear"]
+decayby = "cutoff"
+# ["expdecay", "IPL", "alt-IPL", "linear", "cutoff"]
 decayfunc = decayfns[decayby]
 
 #multirun(50, coord, power, 0.5, 30, 100)
@@ -416,6 +416,8 @@ decayfunc = decayfns[decayby]
 writeresultshne(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc,
                 dim, limit)
 
+#writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc,
+#                dim, limit)
 
 #testhne(8, coord, 5, 35, 25, decayfunc, dim)
 #multihne(popsizes[2], coord, gammalist[3], epochs, limit, decayfunc,
