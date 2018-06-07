@@ -87,11 +87,21 @@ function linear(a, b, dropoff, dim)
   dropoff*(1 - 2*agentdist(a,b, dim))
 end
 
-# functions have type agent -> agent -> Re+ -> Re+ -> Re+
+# 1 for d(a,b) < dropoff, 0 otherwise
+function cutoff(a, b, dropoff, dim)
+  if dropoff*agentdist(a, b, ) < 1
+    x = 1
+  else
+    x = 0
+  end
+  return x
+end
+
 decayfns = Dict{String, Function}("expdecay" => expdecay,
                                   "IPL" => inversepower,
                                   "alt-IPL" => altipl,
-                                  "linear" => linear)
+                                  "linear" => linear,
+                                  "cutoff" => cutoff)
 
 function typedsums(list, label, power, func, dim)
                   #takes [Agent] and a label to find out the
