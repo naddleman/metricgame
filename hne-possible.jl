@@ -396,14 +396,14 @@ game = [-1 -1; 1 1]
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [4,8,12,16,20,24,28,32,36,40,44]
-gammalist = [2, 4, 8, 16, 32]
+popsizes = [4,12,20,28,36,44, 52, 60]
+gammalist = [2, 4, 6, 8, 10, 12]
 alpha = 2 # exponent for inverse power laws
-epochs = 100
+epochs = 50
 limit = 25 # how many times to try to find an HNE
-runs = 200
+runs = 250
 hnelimit = 25 # give up finding hne after this pt
-decayby = "cutoff"
+decayby = "expdecay" 
 # ["expdecay", "IPL", "alt-IPL", "linear", "cutoff"]
 decayfunc = decayfns[decayby]
 
