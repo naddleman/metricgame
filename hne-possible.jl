@@ -1,4 +1,6 @@
-"Place n agents randomly across N-D flat torus to check if HNE possible"
+#=Place n agents randomly across N-D flat torus to check if HNE possible=#
+using Dates
+using DelimitedFiles
 
 mutable struct Agent
   loc:: Float64
@@ -27,18 +29,20 @@ function tdis(pt1, pt2) #minimum euclidean distance on circle
 end
 
 function tdis2(pt1, pt2) #minimum euclidean distance on circle
-  return sqrt(perpdist(pt1[1],pt2[1])^2 + perpdist(pt1[2],pt2[2])^2)
+  return sqrt(perpdist(pt1[1],pt2[1])^2 +
+              perpdist(pt1[2],pt2[2])^2)
 end
 
 function tdis3(pt1, pt2) #minimum euclidean distance on circle
-  return sqrt(perpdist(pt1[1],pt2[1])^2 + perpdist(pt1[2],pt2[2])^2
-              + perpdist(pt1[3],pt2[3])^2)
+  return sqrt(perpdist(pt1[1],pt2[1])^2 +
+              perpdist(pt1[2],pt2[2])^2 +
+              perpdist(pt1[3],pt2[3])^2)
 end
 
 agenttypes = [Agent, Agent2d, Agent3d]
-
 distancefns = [tdis, tdis2, tdis3]
 
+#TODO:  get p working with following function
 function mkagents(n::Integer, p, dim) # agents have [(location), type, label]
   lis = []
   if dim == 1
@@ -71,7 +75,7 @@ function agentdist(a, b, dim)
 end
 
 ## alpha is unused here
-function expdecay(a, b, dropoff,dim) #tentatitive strength
+function expdecay(a, b, dropoff, dim) #tentatitive strength
   exp(-dropoff * agentdist(a,b, dim))                 #of interaction
 end
 
@@ -84,10 +88,9 @@ function altipl(a, b, dropoff, dim)
 end
 
 function linear(a, b, dropoff, dim)
-  dropoff*(1 - 2*agentdist(a,b, dim))
+  dropoff*(1 - 2 * agentdist(a,b, dim))
 end
 
-# 1 for d(a,b) < dropoff, 0 otherwise
 function cutoff(a, b, dropoff, dim)
   if dropoff*agentdist(a, b, dim) < 1
     x = 1
@@ -119,8 +122,9 @@ function typedsums(list, label, power, func, dim)
   return sums
 end
 
-function genweightmatrix(list, power, func, dim) #matrix of agent-agent interaction strength
-  matrix = Array{Float64}((length(list), length(list)))
+#matrix of agent-agent interaction strength
+function genweightmatrix(list, power, func, dim)
+  matrix = Array{Float64}(undef, (length(list), length(list)))
   for i in 1:length(list)
     for j in 1:length(list)
       if i == j
@@ -135,8 +139,8 @@ end
 
  #matrix not to recalculate interactions
 function payofflist(list, powermatrix, game)
-  payofflist = zero(Array{Float64}(length(list)))
-  strats = Array{Integer}(length(list))
+  payofflist = zero(Array{Float64}(undef, length(list)))
+  strats = Array{Integer}(undef, length(list))
   for i in 1:length(list)
     strats[i] = list[i].strat
   end
@@ -204,7 +208,7 @@ function runsimulationbr(numagents, payoffs, distancepower, prob,
   typelocations = [splitpops(population)]
   for i in 1:iterations
     if i % numagents == 0
-      @printf "epoch %d: " (i/numagents)
+      print("epoch %d: ", (i/numagents))
       println(getproportion(population))
       push!(typelocations, splitpops(population))
     end
@@ -229,7 +233,7 @@ function runlocsbr(locations, payoffs, distancepower, prob, epochs, func
   typelocations = [splitpops(population)]
   for i in 1:iterations
     if i % numagents == 0
-      @printf "epoch %d: " (i/numagents)
+      printf("epoch %d: ", (i/numagents))
       println(getproportion(population))
       push!(typelocations, splitpops(population))
     end
@@ -351,7 +355,7 @@ function writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
   csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby, "-dim-",
                     dim, "-HNE-parameter-sweep.csv")
   popsrow = deepcopy(popsizelist)
-  results = Array{Float64}(length(gammalist) + 1, length(popsizelist) + 1)
+  results = Array{Float64}(undef, length(gammalist) + 1, length(popsizelist) + 1)
   results[1, :] = prepend!(popsrow, 0)
   for i in 1:length(gammalist)
     results[i+1,:] = prepend!(popsizehnesweep(
@@ -359,7 +363,9 @@ function writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
                                 epochs, limit, runs, func, dim)[2],
                               gammalist[i])
   end
-  writecsv(csvtitle, results)
+  open(csvtitle, "w") do io
+    writedlm(io, results, ',')
+  end
 end
 
 function writeresults(popsizelist, payoffs, gammalist,
@@ -367,14 +373,16 @@ function writeresults(popsizelist, payoffs, gammalist,
   csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby, "-dim-",
                     dim, "-parameter-sweep.csv")
   popsrow = deepcopy(popsizelist)
-  results = Array{Float64}(length(gammalist) + 1, length(popsizelist) + 1)
+  results = Array{Float64}(undef, length(gammalist) + 1, length(popsizelist) + 1)
   results[1, :] = prepend!(popsrow, 0)
   for i in 1:length(gammalist)
     results[i+1,:] = prepend!(popsizesweep(popsizelist, payoffs, gammalist[i],
                                           prob, epochs, runs, func, dim)[2],
                               gammalist[i])
   end
-  writecsv(csvtitle, results)
+  open(csvtitle, "w") do io
+      writedlm(io, results, ',')
+  end
 end
 # locationarray is an array of pairs of lists of coordinates :(
 #using Plots
@@ -389,32 +397,58 @@ end
 #  end
 #end
 
+
+
+
 ##Constants
 dim = 1
-power = 15 
-game = [-1 -1; 1 1]
+power = 15 # decay (gamma)
+prob = 0.5 #intial proportion playing each strategy
 PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
-popsizes = [4,12,20,28,36,44, 52, 60]
-gammalist = [2, 4, 6, 8, 10, 12]
+game = coord
+popsizes = [4,12]
+gammalist = [2, 6, 10]
+alphalist = [2, 2.5, 3]
 alpha = 2 # exponent for inverse power laws
 epochs = 50
 limit = 25 # how many times to try to find an HNE
-runs = 250
+runs = 10 # runs per population size
 hnelimit = 25 # give up finding hne after this pt
 decayby = "expdecay" 
 # ["expdecay", "IPL", "alt-IPL", "linear", "cutoff"]
 decayfunc = decayfns[decayby]
 
+#function writeresults(popsizelist, payoffs, gammalist,
+#                      prob, epochs, runs, func, dim, limit)
+parameters = Dict{String, Any}("poplist"     => popsizes,
+                               "payoffs"     => game,
+                               "gammas"      => gammalist,
+                               "alphas"      => alphalist,
+                               "probability" => prob,
+                               "epochs"      => epochs,
+                               "runs"        => runs,
+                               "func"        => decayfunc,
+                               "dim"         => dim,
+                               "limit"       => limit
+                              )
+
+
 #multirun(50, coord, power, 0.5, 30, 100)
+#
 #typelocs = runsimulationbr(10, coord, power, 0.5, 35)
 #locationgif(typelocs)
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
 
-writeresultshne(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc,
-                dim, limit)
+writeresults([4,8], coord, gammalist,
+                      prob, epochs, runs, decayfunc, dim, limit)
+
+#writeresultshne(popsizes, coord,
+#                gammalist, 0.5,
+#                epochs, runs, decayfunc,
+#                dim, limit)
 
 #writeresults(popsizes, coord, gammalist, 0.5, epochs, runs, decayfunc,
 #                dim, limit)
