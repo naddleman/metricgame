@@ -75,23 +75,23 @@ function agentdist(a, b, dim)
 end
 
 ## alpha is unused here
-function expdecay(a, b, dropoff, dim) #tentatitive strength
+function expdecay(a, b, dropoff, dim, alpha) #tentatitive strength
   exp(-dropoff * agentdist(a,b, dim))                 #of interaction
 end
 
-function inversepower(a, b, dropoff, dim)
+function inversepower(a, b, dropoff, dim, alpha)
   1 / (dropoff * agentdist(a,b,dim))^alpha
 end
 
-function altipl(a, b, dropoff, dim)
+function altipl(a, b, dropoff, dim, alpha)
   1 / (1 + (dropoff * agentdist(a,b,dim))^alpha)
 end
 
-function linear(a, b, dropoff, dim)
+function linear(a, b, dropoff, dim, alpha)
   dropoff*(1 - 2 * agentdist(a,b, dim))
 end
 
-function cutoff(a, b, dropoff, dim)
+function cutoff(a, b, dropoff, dim, alpha)
   if dropoff*agentdist(a, b, dim) < 1
     x = 1
   else
@@ -106,7 +106,7 @@ decayfns = Dict{String, Function}("expdecay" => expdecay,
                                   "linear" => linear,
                                   "cutoff" => cutoff)
 
-function typedsums(list, label, power, func, dim)
+function typedsums(params, list, label, gamma)
                   #takes [Agent] and a label to find out the
                   # strength of pull from each type
   workinglist = copy(list)
@@ -114,30 +114,34 @@ function typedsums(list, label, power, func, dim)
   sums = [0.0,0.0]
   for agent in workinglist
     if agent.strat == 1
-      sums[1] += func(list[label],agent,power, dim)
+        sums[1] += params["func"](list[label],agent, gamma, params["dim"])
     else
-      sums[2] += func(list[label],agent,power, dim)
+        sums[2] += params["func"](list[label],agent, gamma, params["dim"])
     end
   end
   return sums
 end
 
 #matrix of agent-agent interaction strength
-function genweightmatrix(list, power, func, dim)
-  matrix = Array{Float64}(undef, (length(list), length(list)))
-  for i in 1:length(list)
-    for j in 1:length(list)
+function genweightmatrix(params, population, gamma, alpha)
+  matrix = Array{Float64}(undef, (length(population), length(population)))
+  for i in 1:length(population)
+    for j in 1:length(population)
       if i == j
-        matrix[i, j] = 0
+          matrix[i, j] = 0
       else
-        matrix[i, j] = func(list[i], list[j], power, dim)
+          matrix[i, j] = params["func"](population[i],
+                                        population[j],
+                                        gamma,
+                                        params["dim"],
+                                        alpha)
       end
     end
   end
   return matrix
 end
 
- #matrix not to recalculate interactions
+#create matrix so don't have to recalculate interactions
 function payofflist(list, powermatrix, game)
   payofflist = zero(Array{Float64}(undef, length(list)))
   strats = Array{Integer}(undef, length(list))
@@ -154,11 +158,12 @@ function payofflist(list, powermatrix, game)
   return payofflist
 end
 
-function brupdate(label, list, powermatrix, gamematrix) #Best response update
+#Best response update, if indifferent, keep strategy
+function brupdate(label, list, weightmatrix, gamematrix)
   util1, util2 = 0, 0
   for i in 1:length(list)
-    util1 += gamematrix[1, list[i].strat] * powermatrix[label, i]
-    util2 += gamematrix[2, list[i].strat] * powermatrix[label, i]
+    util1 += gamematrix[1, list[i].strat] * weightmatrix[label, i]
+    util2 += gamematrix[2, list[i].strat] * weightmatrix[label, i]
   end
   if util1 < util2
     list[label].strat = 2
@@ -195,75 +200,71 @@ end
 
 #arguments: # agents, game, distance discounting, Pr(strat =1),
 # iterations, decay function
-function runsimulationbr(numagents, payoffs, distancepower, prob,
-                         epochs, func, dim)
-  iterations = epochs * numagents
-  population = mkagents(numagents, prob, dim)
-  weights = genweightmatrix(population, distancepower, func, dim)
-  #println("starting condition:")
-  #println(population)
-  print("proportion playing 1:")
-  println(getproportion(population))
-  # for generating colored plot of agent locations
-  typelocations = [splitpops(population)]
-  for i in 1:iterations
-    if i % numagents == 0
-      print("epoch %d: ", (i/numagents))
-      println(getproportion(population))
-      push!(typelocations, splitpops(population))
+function runsimulationbr(params, numagents, gamma, alpha)
+    iterations = params["epochs"] * numagents
+    population = mkagents(numagents, params["probability"], params["dim"])
+    weights = genweightmatrix(params, population, gamma, alpha)
+    print("proportion playing 1:")
+    println(getproportion(population))
+    # for generating colored plot of agent locations
+    typelocations = [splitpops(population)]
+    for i in 1:iterations
+      if i % numagents == 0
+        print("epoch ", (i/numagents), ": ")
+        println(getproportion(population))
+        push!(typelocations, splitpops(population))
+      end
+      brupdate(rand(1:numagents), population, weights, payoffs)
     end
-    brupdate(rand(1:numagents), population, weights, payoffs)
-  end
-  #println(population)
-  println("simulation successful!")
-  #plot(typelocations[1][1], seriestype=:scatter)
-  #plot!(typelocations[1][2], seriestype=:scatter)
-  return (typelocations, getproportion(population)) 
+    println("simulation successful!")
+    #plot(typelocations[1][1], seriestype=:scatter)
+    #plot!(typelocations[1][2], seriestype=:scatter)
+    return (typelocations, getproportion(population)) 
 end
 
 # simulates with fixed agent locations instead of making list of agents
-function runlocsbr(locations, payoffs, distancepower, prob, epochs, func
-                   , dim)
-  iterations = epochs * length(locations)
-  numagents = length(locations)
-  population = mkagentslocations(locations, prob, dim)
-  weights = genweightmatrix(population, distancepower, func, dim)
-  print("proportion playing 1:")
-  println(getproportion(population))
-  typelocations = [splitpops(population)]
-  for i in 1:iterations
-    if i % numagents == 0
-      printf("epoch %d: ", (i/numagents))
-      println(getproportion(population))
-      push!(typelocations, splitpops(population))
+function runlocsbr(params, locations, gamma, alpha)
+    iterations = params["epochs"] * length(locations)
+    numagents = length(locations)
+    population = mkagentslocations(locations,
+                                   params["probability"],
+                                   params["dim"])
+    weights = genweightmatrix(params, population, gamma, alpha)
+    print("proportion playing 1:")
+    println(getproportion(population))
+    typelocations = [splitpops(population)]
+    for i in 1:iterations
+      if i % numagents == 0
+        print("epoch ", (i/numagents), ": ")
+        println(getproportion(population))
+        push!(typelocations, splitpops(population))
+      end
+      brupdate(rand(1:numagents), population, weights, params["payoffs"])
     end
-    brupdate(rand(1:numagents), population, weights, payoffs)
-  end
-  println("simulation successful!")
-  return (typelocations, getproportion(population))
+    println("simulation successful!")
+    return (typelocations, getproportion(population))
 end
 
 
 # this initializes locations and runs a series of simulations with different
 #initial strategies to see if the arrangment admits an HNE
 
-function testhne(numagents, payoffs, distancepower, epochs, limit, func, dim)
+function testhne(params, numagents, gamma, alpha)
   locs = []
   heterocount = 0
   i = 0
   for i in 1:numagents
-    if dim == 1
-      push!(locs, rand())
-    elseif dim == 2
-      push!(locs, (rand(), rand()))
-    elseif dim == 3
-      push!(locs, (rand(), rand(), rand()))
+      if params["dim"] == 1
+        push!(locs, rand())
+      elseif params["dim"] == 2
+        push!(locs, (rand(), rand()))
+      elseif params["dim"] == 3
+        push!(locs, (rand(), rand(), rand()))
     end
   end
-  for i = 1:limit
+  for i = 1:params["limit"]
     println("testing arrangement iteration: ", i)
-    heterogeneity = runlocsbr(locs, payoffs, distancepower, 0.5, epochs,
-                              func, dim)[2]
+    heterogeneity = runlocsbr(params, locs, gamma, alpha)[2]
     if !(heterogeneity == 0 || heterogeneity == 1)
       heterocount += 1
       break
@@ -280,28 +281,24 @@ end
 #TODO: HERE    
 # generates a set of locations and tests which proportion admits HNE
 
-function multihne(numagents, payoffs, distancepower, epochs, limit, func,
-                  dim, runs)
+function multihne(params, numagents, gamma, alpha)
   hnecount = 0
-  for i = 1:runs
+  for i = 1:params["runs"]
     print("Pop size: ", numagents)
-    println("  Run ", i, " out of ", runs)
-    hnecount += testhne(numagents, payoffs, distancepower, epochs, limit,
-                        func, dim)
+    println("  Run ", i, " out of ", params["runs"])
+    hnecount += testhne(params, numagents, gamma, alpha)
   end
-  fraction = hnecount / runs
+  fraction = hnecount / params["runs"]
   println(fraction, " admit HNE")
   return fraction
 end
 
-function multirun(numagents, payoffs, distancepower, prob, epochs,
-                  runs, func, dim)
+function multirun(params, numagents, gamma)
   proportions = []
-  for i in 1:runs
+  for i in 1:params["runs"]
     print("Pop size: ", numagents)
-    println("  Run ", i, " out of ", runs)
-    push!(proportions, runsimulationbr(numagents, payoffs, distancepower,
-                                     prob, epochs, func, dim)[2])
+    println("  Run ", i, " out of ", params["runs"])
+    push!(proportions, runsimulationbr(params, numagents, gamma)[2])
   end
   x = length(proportions)
   y = 0
@@ -315,20 +312,18 @@ function multirun(numagents, payoffs, distancepower, prob, epochs,
   return (proportions, y/length(proportions))
 end
 
-function popsizesweep(popsizelist, payoffs, distancepower,
-                      prob, epochs, runs, func, dim)
+function popsizesweep(params, specgamma)
   heterogeneousfraction = []
   proportionslist = []
-  for size in popsizelist
-    push!(proportionslist, (size, multirun(size, payoffs, distancepower, prob,
-                                           epochs, runs, func, dim))[2])
+  for size in params["poplist"] 
+    push!(proportionslist, (size, multirun(params, size, specgamma))[2])
   end
-  println("\n######\ngamma = ", distancepower)
-  println("epochs = ", epochs)
-  println("runs per population size = ", runs)
+  println("\n######\ngamma = ", specgamma)
+  println("epochs = ", params["epochs"])
+  println("runs per population size = ", params["runs"])
   for i in 1:length(proportionslist)
     push!(heterogeneousfraction, proportionslist[i][2])
-    println("population size: ", popsizelist[i], " HNE proportion: ",
+    println("population size: ", params["poplist"][i], " HNE proportion: ",
             proportionslist[i][2])
   end
   #for i in proportionslist
@@ -337,48 +332,56 @@ function popsizesweep(popsizelist, payoffs, distancepower,
   return (popsizelist, heterogeneousfraction)
 end
 
-function popsizehnesweep(popsizelist, payoffs, distancepower, prob,
-                         epochs, limit, runs, func, dim)
+function popsizehnesweep(params, specgamma, specalpha)
   hnepossiblefraction = []
-  for size in popsizelist
-    push!(hnepossiblefraction, multihne(size, payoffs, distancepower, epochs,
-                                        limit, func, dim, runs))
+  for size in params["poplist"]
+      push!(hnepossiblefraction, multihne(params, size, specgamma, specalpha))
   end
-  println("\n######\ngamma = ", distancepower)
-  println("epochs = ", epochs)
-  println("runs per population size = ", runs)
-  return (popsizelist, hnepossiblefraction)
+  println("\n######\ngamma = ", specgamma)
+  println("alpha = ", specalpha)
+  println("epochs = ", params["epochs"])
+  println("runs per population size = ", params["runs"])
+  return (params["poplist"], hnepossiblefraction)
 end
 
-function writeresultshne(popsizelist, payoffs, gammalist, prob, epochs, runs,
-                         func, dim, limit)
-  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby, "-dim-",
-                    dim, "-HNE-parameter-sweep.csv")
-  popsrow = deepcopy(popsizelist)
-  results = Array{Float64}(undef, length(gammalist) + 1, length(popsizelist) + 1)
+function writeresultshne(params) # cycling over gammas, takes first alpha
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),
+                    "-",
+                    decayby,
+                    "-dim-",
+                    dim,
+                    "-HNE-parameter-sweep.csv")
+  popsrow = deepcopy(params["poplist"])
+  results = Array{Float64}(undef,
+                           length(params["gammas"]) + 1,
+                           length(params["poplist"]) + 1)
   results[1, :] = prepend!(popsrow, 0)
-  for i in 1:length(gammalist)
-    results[i+1,:] = prepend!(popsizehnesweep(
-                                popsizelist, payoffs, gammalist[i], prob,
-                                epochs, limit, runs, func, dim)[2],
-                              gammalist[i])
+  for i in 1:length(params["gammas"])
+      results[i+1,:] = prepend!(popsizehnesweep(params,
+                                                params["gammas"][i],
+                                                params["alphas"][1])[2],
+                                params["gammas"][i])
   end
   open(csvtitle, "w") do io
-    writedlm(io, results, ',')
+      writedlm(io, results, ',')
   end
 end
 
-function writeresults(popsizelist, payoffs, gammalist,
-                      prob, epochs, runs, func, dim, limit)
-  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),"-", decayby, "-dim-",
-                    dim, "-parameter-sweep.csv")
-  popsrow = deepcopy(popsizelist)
-  results = Array{Float64}(undef, length(gammalist) + 1, length(popsizelist) + 1)
+function writeresults(params)
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),
+                    "-",
+                    params["func"],
+                    "-dim-",
+                    params["dim"],
+                    "-parameter-sweep.csv")
+  popsrow = deepcopy(params["poplist"])
+  results = Array{Float64}(undef,
+                           length(params["gammas"]) + 1,
+                           length(params["poplist"]) + 1)
   results[1, :] = prepend!(popsrow, 0)
-  for i in 1:length(gammalist)
-    results[i+1,:] = prepend!(popsizesweep(popsizelist, payoffs, gammalist[i],
-                                          prob, epochs, runs, func, dim)[2],
-                              gammalist[i])
+  for i in 1:length(params["gammas"])
+      results[i+1,:] = prepend!(popsizesweep(params, params["gammas"][i])[2],
+                                params["gammas"][i])
   end
   open(csvtitle, "w") do io
       writedlm(io, results, ',')
@@ -442,8 +445,7 @@ parameters = Dict{String, Any}("poplist"     => popsizes,
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
 
-writeresults([4,8], coord, gammalist,
-                      prob, epochs, runs, decayfunc, dim, limit)
+writeresultshne(parameters)
 
 #writeresultshne(popsizes, coord,
 #                gammalist, 0.5,
