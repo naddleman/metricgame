@@ -235,8 +235,8 @@ function runlocsbr(params, locations, gamma, alpha)
     typelocations = [splitpops(population)]
     for i in 1:iterations
       if i % numagents == 0
-        print("epoch ", (i/numagents), ": ")
-        println(getproportion(population))
+        #print("epoch ", (i/numagents), ": ")
+        #println(getproportion(population))
         push!(typelocations, splitpops(population))
       end
       brupdate(rand(1:numagents), population, weights, params["payoffs"])
@@ -345,7 +345,7 @@ function popsizehnesweep(params, specgamma, specalpha)
 end
 
 function writeresultshne(params) # cycling over gammas, takes first alpha
-  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd-HHMM"),
                     "-",
                     decayby,
                     "-dim-",
@@ -368,7 +368,7 @@ function writeresultshne(params) # cycling over gammas, takes first alpha
 end
 
 function writeresults(params)
-  csvtitle = string(Dates.format(now(), "yyyy-mm-dd"),
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd-HHMM"),
                     "-",
                     params["func"],
                     "-dim-",
@@ -387,6 +387,42 @@ function writeresults(params)
       writedlm(io, results, ',')
   end
 end
+
+function alphahnesweep(params) # cycling over alphas, takes first gamma
+  csvtitle = string(Dates.format(now(), "yyyy-mm-dd-HHMM"),
+                    "-",
+                    decayby,
+                    "-dim-",
+                    dim,
+                    "-alpha-HNE-sweep.csv")
+  txttitle = string(Dates.format(now(), "yyyy-mm-dd-HHMM"),
+                    "-",
+                    decayby,
+                    "-dim-",
+                    dim,
+                    "-alpha-HNE-sweep.txt")
+  popsrow = deepcopy(params["poplist"])
+  results = Array{Float64}(undef,
+                           length(params["alphas"]) + 1,
+                           length(params["poplist"]) + 1)
+  results[1, :] = prepend!(popsrow, 0)
+  for i in 1:length(params["alphas"])
+      results[i+1,:] = prepend!(popsizehnesweep(params,
+                                                params["gammas"][1],
+                                                params["alphas"][i])[2],
+                                params["alphas"][i])
+  end
+  open(csvtitle, "w") do io
+      writedlm(io, results, ',')
+  end
+  open(txttitle, "w") do io
+    for i in keys(params)
+        x = string(i, ": ", params[i])
+        write(io, x, "\n")
+    end
+  end
+end
+
 # locationarray is an array of pairs of lists of coordinates :(
 #using Plots
 #pyplot()
@@ -411,15 +447,15 @@ PD = [2 0; 2.5 0.5]
 SH = [4 0; 3 3]
 coord = [1 0; 0 1]
 game = coord
-popsizes = [4,12]
-gammalist = [2, 6, 10]
-alphalist = [2, 2.5, 3]
+popsizes = [4 + x for x in 0:4]
+gammalist = [1, 1, 1]
+alphalist = [1 + 0.1 * x for x in 0:40]
 alpha = 2 # exponent for inverse power laws
 epochs = 50
-limit = 25 # how many times to try to find an HNE
-runs = 10 # runs per population size
+limit = 40 # how many times to try to find an HNE
+runs = 1000 # runs per population size
 hnelimit = 25 # give up finding hne after this pt
-decayby = "expdecay" 
+decayby = "IPL" 
 # ["expdecay", "IPL", "alt-IPL", "linear", "cutoff"]
 decayfunc = decayfns[decayby]
 
@@ -445,7 +481,7 @@ parameters = Dict{String, Any}("poplist"     => popsizes,
 #println(typelocs[1][1])
 #plot(typelocs[1][1], seriestype=:scatter)
 
-writeresultshne(parameters)
+alphahnesweep(parameters)
 
 #writeresultshne(popsizes, coord,
 #                gammalist, 0.5,
